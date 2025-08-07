@@ -2,3 +2,4 @@ flask
 flask-session
 flask-mysqldb
 together
+mysql-connector-python

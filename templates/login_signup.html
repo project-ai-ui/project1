@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VINCI – Chat + Login</title>
+  <title>Chat-BOT</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.ico') }}">
   <style>
     * {
       box-sizing: border-box;
@@ -171,8 +172,8 @@
     }
 
     @media (max-width: 480px) {
-      .chat-box {
-        height: 300px;
+      .chat-wrapper {
+        height: 520px;
       }
     }
   </style>
