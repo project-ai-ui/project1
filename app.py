@@ -23,7 +23,46 @@ headers = {
     "Content-Type": "application/json"
 }
 
+# Full intro prompts list
+intro_prompts = [
+    "tell me about yourself", "tell me something about yourself", "tell me about you",
+    "about yourself", "about you", "give me your details", "what are you",
+    "what is your name", "whats your name", "what’s your name", "who are you",
+    "who you are", "who r u", "who u are", "who are u",
+    "could you tell me about yourself", "please tell me about yourself",
+    "i would like to know about you", "i’d like to know about you",
+    "may i know about you", "can you tell me about you", "can you introduce yourself",
+    "please introduce yourself", "would you mind introducing yourself",
+    "can you share something about yourself",
+    "sup who are you", "hey what are you", "hi who are u", "yo tell me about urself",
+    "tell me about u bro", "yo who are you", "dude who are you", "tell me about you man",
+    "so who are you", "ay who are you", "hru who are you",
+    "describe yourself", "give me your intro", "what do you do",
+    "whats your purpose", "what’s your purpose", "what’s your role",
+    "what can you do", "what do you know", "what are you capable of", "how do you work",
+    "what are you here for", "what do you exist for", "what can u do",
+    "who made you", "who created you", "who built you", "who developed you",
+    "where were you made", "how were you created", "what are you made for",
+    "what technology are you based on", "how did you come into existence",
+    "so who are you really", "who are you in real life", "are you human",
+    "are you a robot", "are you an ai", "are you alive", "what species are you",
+    "are you real", "are you sentient", "are you conscious"
+]
+
+def is_intro_prompt(user_input: str) -> bool:
+    """Check if user message matches any intro prompt exactly (case-insensitive)."""
+    return user_input.lower().strip() in intro_prompts
+
 def get_bot_response(user_input):
+    # If exact intro prompt match
+    if is_intro_prompt(user_input):
+        return (
+            "Hi! I’m VINCI – Virtual Interactive Natural Chatbot Interface 🤖. "
+            "I’m your AI assistant, here to help answer questions, share knowledge, "
+            "and make conversations more engaging!"
+        )
+
+    # Otherwise use Together API
     data = {
         "model": "meta-llama/Llama-3-8b-chat-hf",
         "messages": [
