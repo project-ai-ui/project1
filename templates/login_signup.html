@@ -104,6 +104,7 @@
       display: flex;
       flex-direction: column;
       height: 600px;
+      position: relative;
     }
 
     .top-bar {
@@ -171,6 +172,62 @@
       cursor: pointer;
     }
 
+    /* Profile Circle */
+    .profile-circle {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: #697565;
+      color: #ECDFCC;
+      font-weight: bold;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      font-size: 1.2rem;
+      box-shadow: 0 0 8px rgba(0,0,0,0.4);
+    }
+
+    .profile-name {
+      position: fixed;
+      bottom: 20px;
+      left: 80px;
+      color: #ECDFCC;
+      font-weight: bold;
+    }
+
+    /* Profile Modal */
+    .profile-modal {
+      display: none;
+      position: fixed;
+      bottom: 80px;
+      left: 20px;
+      background: #3C3D37;
+      color: #ECDFCC;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      width: 250px;
+      z-index: 1000;
+    }
+
+    .profile-content {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .close-btn {
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #ECDFCC;
+      cursor: pointer;
+      align-self: flex-end;
+    }
+
     @media (max-width: 480px) {
       .chat-wrapper {
         height: 520px;
@@ -213,7 +270,7 @@
   <div class="chat-wrapper">
     <div class="top-bar">
       VINCI – Virtual Interactive Natural Chatbot Interface<br>
-      <small>Welcome {{ session['user'] }} | <a href="/logout" style="color:#fff; text-decoration: underline;">Logout</a></small>
+      <small>Welcome {{ session['user']['name'] }} | <a href="/logout" style="color:#fff; text-decoration: underline;">Logout</a></small>
     </div>
     <div class="chat-box" id="chat-box">
       <div class="message bot">Hello! Ask me anything 🤖</div>
@@ -223,6 +280,25 @@
         <input type="text" id="user-input" placeholder="Type your message..." autofocus />
         <button type="submit">Send</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Profile Circle -->
+  <div class="profile-circle" onclick="toggleProfile()">
+    {{ session['user']['name'][0]|upper }}
+  </div>
+  <div class="profile-name">
+    {{ session['user']['name'] }}
+  </div>
+
+  <!-- Profile Modal -->
+  <div id="profile-modal" class="profile-modal">
+    <div class="profile-content">
+      <span class="close-btn" onclick="toggleProfile()">&times;</span>
+      <h2>Profile Details</h2>
+      <p><strong>Name:</strong> {{ session['user']['name'] }}</p>
+      <p><strong>Email:</strong> {{ session['user']['email'] }}</p>
+      <a href="/logout" style="color:#ff4d4d; text-decoration: underline;">Logout</a>
     </div>
   </div>
 {% endif %}
@@ -270,6 +346,11 @@
     }
 
     chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function toggleProfile() {
+    const modal = document.getElementById("profile-modal");
+    modal.style.display = modal.style.display === "block" ? "none" : "block";
   }
 </script>
 </body>
