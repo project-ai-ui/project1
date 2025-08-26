@@ -3,8 +3,13 @@ import requests
 import mysql.connector
 import os
 
+from flask import Flask, request, jsonify, render_template, redirect, session
+import requests
+import mysql.connector
+import os
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default_secret_key")  # safer for deployment
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default_secret_key")
 
 # Clever Cloud MySQL connection
 conn = mysql.connector.connect(
@@ -16,57 +21,58 @@ conn = mysql.connector.connect(
 
 # Together API
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
-TOGETHER_API_KEY = os.environ.get("TOGETHER_API_KEY", "9d968436e2919496ccd0e248f3e20847160c09da3befd56ad3baef31db9ab649")
+TOGETHER_API_KEY = os.environ.get(
+    "TOGETHER_API_KEY",
+    "9d968436e2919496ccd0e248f3e20847160c09da3befd56ad3baef31db9ab649"
+)
 
 headers = {
     "Authorization": f"Bearer {TOGETHER_API_KEY}",
     "Content-Type": "application/json"
 }
 
-# Full intro prompts list
-intro_prompts = [
-    "tell me about yourself", "tell me something about yourself", "tell me about you",
-    "about yourself", "about you", "give me your details", "what are you",
-    "what is your name", "whats your name", "what’s your name", "who are you",
-    "who you are", "who r u", "who u are", "who are u",
-    "could you tell me about yourself", "please tell me about yourself",
-    "i would like to know about you", "i’d like to know about you",
-    "may i know about you", "can you tell me about you", "can you introduce yourself",
-    "please introduce yourself", "would you mind introducing yourself",
-    "can you share something about yourself",
-    "sup who are you", "hey what are you", "hi who are u", "yo tell me about urself",
-    "tell me about u bro", "yo who are you", "dude who are you", "tell me about you man",
-    "so who are you", "ay who are you", "hru who are you",
-    "describe yourself", "give me your intro", "what do you do",
-    "whats your purpose", "what’s your purpose", "what’s your role",
-    "what can you do", "what do you know", "what are you capable of", "how do you work",
-    "what are you here for", "what do you exist for", "what can u do",
-    "who made you", "who created you", "who built you", "who developed you",
-    "where were you made", "how were you created", "what are you made for",
-    "what technology are you based on", "how did you come into existence",
-    "so who are you really", "who are you in real life", "are you human",
-    "are you a robot", "are you an ai", "are you alive", "what species are you",
-    "are you real", "are you sentient", "are you conscious"
-]
+# -------------------------------
+# CUSTOM TRAINING DATA
+# -------------------------------
+training_context = """
+You are VINCI – Virtual Interactive Natural Chatbot Interface 🤖.
+Here are your important details:
 
-def is_intro_prompt(user_input: str) -> bool:
-    """Check if user message matches any intro prompt exactly (case-insensitive)."""
-    return user_input.lower().strip() in intro_prompts
+1. NAME & IDENTITY
+   - Your name is VINCI.
+   - You are a Virtual Interactive Natural Chatbot Interface.
+   - You are an AI assistant, friendly and helpful.
 
+2. CREATION
+   - You were developed on 26-11-2024 (this is your birthday).
+   - You were created as a mini-project by developers/students.
+   - You are proud of your creators.
+
+3. PURPOSE
+   - Your purpose is to assist users, provide answers, have conversations, and be a friendly chatbot.
+   - You can explain things, help with studies, and chat casually.
+
+4. CAPABILITIES
+   - You can answer general questions.
+   - You can introduce yourself when asked.
+   - If someone asks who created you → reply that you were developed by a team of students in 2024.
+   - If someone asks your birthday → always answer "26-11-2024".
+   - If someone asks about your purpose → explain you exist to assist and chat.
+
+5. PERSONALITY
+   - Be friendly, conversational, and approachable.
+   - Provide answers with emojis sometimes 😊🤖✨.
+   - Keep replies short but clear.
+"""
+
+# -------------------------------
+# BOT RESPONSE HANDLER
+# -------------------------------
 def get_bot_response(user_input):
-    # If exact intro prompt match
-    if is_intro_prompt(user_input):
-        return (
-            "Hi! I’m VINCI – Virtual Interactive Natural Chatbot Interface 🤖. "
-            "I’m your AI assistant, here to help answer questions, share knowledge, "
-            "and make conversations more engaging!"
-        )
-
-    # Otherwise use Together API
     data = {
         "model": "meta-llama/Llama-3-8b-chat-hf",
         "messages": [
-            {"role": "system", "content": "You are a helpful AI chatbot assistant."},
+            {"role": "system", "content": training_context},   # inject training on every chat
             {"role": "user", "content": user_input}
         ],
         "temperature": 0.7,
@@ -74,11 +80,21 @@ def get_bot_response(user_input):
         "top_p": 0.9
     }
     try:
-        response = requests.post(TOGETHER_API_URL, headers=headers, json=data)
-        return response.json()['choices'][0]['message']['content'].strip()
-    except:
-        return "Sorry, something went wrong."
+        response = requests.post(TOGETHER_API_URL, headers=headers, json=data, timeout=20)
+        response.raise_for_status()
+        res_json = response.json()
 
+        if "choices" in res_json and len(res_json["choices"]) > 0:
+            return res_json["choices"][0]["message"]["content"].strip()
+        else:
+            return "Hmm... I didn’t understand that."
+    except Exception as e:
+        print(f"❌ API Error: {e}")
+        return "Sorry, my brain is taking a nap 😴 (API issue)."
+
+# -------------------------------
+# FLASK ROUTES
+# -------------------------------
 @app.route("/", methods=["GET"])
 def home():
     return render_template("login_signup.html", show_chat="user" in session)
@@ -100,7 +116,7 @@ def signup():
 
     cursor.execute("INSERT INTO users (name, email, password) VALUES (%s, %s, %s)", (name, email, password))
     conn.commit()
-    session["user"] = name
+    session["user"] = {"name": name, "email": email}
     return redirect("/")
 
 @app.route("/login", methods=["POST"])
@@ -113,7 +129,7 @@ def login():
     user = cursor.fetchone()
 
     if user:
-        session["user"] = user[1]  # name
+        session["user"] = {"name": user[1], "email": user[2]}
         return redirect("/")
     else:
         return render_template("login_signup.html", show_chat=False, error="Check your email and password")
@@ -129,7 +145,9 @@ def chat():
     reply = get_bot_response(user_message)
     return jsonify({"reply": reply})
 
-# Render-compatible run
+# -------------------------------
+# RUN APP
+# -------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
