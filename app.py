@@ -2,37 +2,39 @@ from flask import Flask, request, jsonify, render_template, redirect, session
 import requests
 import mysql.connector
 import os
-
-from flask import Flask, request, jsonify, render_template, redirect, session
-import requests
-import mysql.connector
-import os
+import json
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default_secret_key")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "a_very_secure_default_secret_key")
 
-# Clever Cloud MySQL connection
-conn = mysql.connector.connect(
-    host="bt50vekxtlpwanbpzo6n-mysql.services.clever-cloud.com",
-    user="uybdk7ycpidf4axw",
-    password="ke39xPKLUbqr6PBdH351",
-    database="bt50vekxtlpwanbpzo6n"
-)
+# Clever Cloud MySQL connection (credentials unchanged)
+try:
+    conn = mysql.connector.connect(
+        host="bt50vekxtlpwanbpzo6n-mysql.services.clever-cloud.com",
+        user="uybdk7ycpidf4axw",
+        password="ke39xPKLUbqr6PBdH351",
+        database="bt50vekxtlpwanbpzo6n"
+    )
+    print("✅ Successfully connected to the database.")
+except mysql.connector.Error as err:
+    print(f"❌ Database Connection Error: {err}")
+    conn = None # Set conn to None if connection fails
 
-# Together API
-TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
-TOGETHER_API_KEY = os.environ.get(
-    "TOGETHER_API_KEY",
-    "9d968436e2919496ccd0e248f3e20847160c09da3befd56ad3baef31db9ab649"
-)
+# --- START OF CHANGES: Switched to Google Gemini API ---
+
+# 1. Google Gemini API Configuration
+GOOGLE_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
+# Your new Google AI API Key.
+# IMPORTANT: For security, it's best to use environment variables in real projects.
+GOOGLE_API_KEY = "AIzaSyC6hbmGhbe854iTJTnCYppruKqfpMb9uwg"
 
 headers = {
-    "Authorization": f"Bearer {TOGETHER_API_KEY}",
     "Content-Type": "application/json"
 }
 
 # -------------------------------
-# CUSTOM TRAINING DATA
+# CUSTOM TRAINING DATA (Unchanged)
+# This will be used as the system instruction for the Gemini model.
 # -------------------------------
 training_context = """
 You are VINCI – Virtual Interactive Natural Chatbot Interface 🤖.
@@ -66,73 +68,110 @@ Here are your important details:
 """
 
 # -------------------------------
-# BOT RESPONSE HANDLER
+# BOT RESPONSE HANDLER (Updated for Google Gemini)
 # -------------------------------
 def get_bot_response(user_input):
-    data = {
-        "model": "meta-llama/Llama-3-8b-chat-hf",
-        "messages": [
-            {"role": "system", "content": training_context},   # inject training on every chat
-            {"role": "user", "content": user_input}
+    # 2. Updated payload structure for Gemini
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": user_input}]
+            }
         ],
-        "temperature": 0.7,
-        "max_tokens": 256,
-        "top_p": 0.9
+        "systemInstruction": {
+            "parts": [{"text": training_context}]
+        },
+        "generationConfig": {
+            "temperature": 0.7,
+            "topP": 0.9,
+            "maxOutputTokens": 256
+        }
     }
+
     try:
-        response = requests.post(TOGETHER_API_URL, headers=headers, json=data, timeout=20)
-        response.raise_for_status()
+        # The API key is now passed as a URL parameter, not in the headers
+        api_url_with_key = f"{GOOGLE_API_URL}?key={GOOGLE_API_KEY}"
+        response = requests.post(api_url_with_key, headers=headers, data=json.dumps(payload), timeout=20)
+        response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
         res_json = response.json()
 
-        if "choices" in res_json and len(res_json["choices"]) > 0:
-            return res_json["choices"][0]["message"]["content"].strip()
-        else:
-            return "Hmm... I didn’t understand that."
+        # 3. Updated response parsing for Gemini
+        # Check for the expected structure to prevent errors
+        if "candidates" in res_json and res_json["candidates"]:
+            first_candidate = res_json["candidates"][0]
+            if "content" in first_candidate and "parts" in first_candidate["content"] and first_candidate["content"]["parts"]:
+                return first_candidate["content"]["parts"][0]["text"].strip()
+        
+        # If the structure is not as expected, return a fallback message
+        print(f"⚠️ Unexpected API response format: {res_json}")
+        return "Hmm... I seem to have received a confusing response."
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ API Request Error: {e}")
+        return "Sorry, my brain is taking a nap 😴 (API connection issue)."
     except Exception as e:
-        print(f"❌ API Error: {e}")
-        return "Sorry, my brain is taking a nap 😴 (API issue)."
+        print(f"❌ An unexpected error occurred: {e}")
+        return "Oops! Something went wrong on my end."
+
+# --- END OF CHANGES ---
+
 
 # -------------------------------
-# FLASK ROUTES
+# FLASK ROUTES (Unchanged)
 # -------------------------------
 @app.route("/", methods=["GET"])
 def home():
-    return render_template("login_signup.html", show_chat="user" in session)
+    # If the user is logged in, show chat.html, otherwise login_signup.html
+    if "user" in session:
+        return render_template("chat.html", name=session["user"].get("name", "User"))
+    return render_template("login_signup.html")
+
 
 @app.route("/signup", methods=["POST"])
 def signup():
+    if not conn:
+        return render_template("login_signup.html", error="Database is not connected. Cannot sign up.")
+
     name = request.form["name"]
     email = request.form["email"]
     password = request.form["password"]
     confirm = request.form["confirm_password"]
 
     if password != confirm:
-        return render_template("login_signup.html", show_chat=False, error="Passwords do not match.")
+        return render_template("login_signup.html", error="Passwords do not match.")
 
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
     if cursor.fetchone():
-        return render_template("login_signup.html", show_chat=False, error="Email already exists.")
+        return render_template("login_signup.html", error="Email already exists.")
 
     cursor.execute("INSERT INTO users (name, email, password) VALUES (%s, %s, %s)", (name, email, password))
     conn.commit()
+    cursor.close()
+    
     session["user"] = {"name": name, "email": email}
     return redirect("/")
 
 @app.route("/login", methods=["POST"])
 def login():
+    if not conn:
+        return render_template("login_signup.html", error="Database is not connected. Cannot log in.")
+
     email = request.form["email"]
     password = request.form["password"]
 
     cursor = conn.cursor()
+    # Note: Storing passwords in plain text is not secure. Use hashing in a real application.
     cursor.execute("SELECT * FROM users WHERE email=%s AND password=%s", (email, password))
     user = cursor.fetchone()
+    cursor.close()
 
     if user:
         session["user"] = {"name": user[1], "email": user[2]}
         return redirect("/")
     else:
-        return render_template("login_signup.html", show_chat=False, error="Check your email and password")
+        return render_template("login_signup.html", error="Invalid email or password.")
 
 @app.route("/logout")
 def logout():
@@ -141,7 +180,13 @@ def logout():
 
 @app.route("/get", methods=["POST"])
 def chat():
-    user_message = request.json["msg"]
+    if "user" not in session:
+        return jsonify({"reply": "You must be logged in to chat."}), 401
+    
+    user_message = request.json.get("msg")
+    if not user_message:
+        return jsonify({"reply": "I didn't receive a message."})
+        
     reply = get_bot_response(user_message)
     return jsonify({"reply": reply})
 
